@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hungarian Algorithm Visualizer (OR-Tools Linear Sum Assignment)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Perfectly center input number spinners and text */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+            text-align: center;
+        }
+        /* Custom smooth scrollbar for mobile overflow */
+        .custom-scroll::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.4);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <header class="bg-slate-800 border-b border-slate-700 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between shadow-md shrink-0 sticky top-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 text-white p-2 rounded-xl shadow-lg flex items-center justify-center">
+                <i class="fa-solid fa-network-wired text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    Hungarian Algorithm Visualizer
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hidden xs:inline-block">OR-Tools Inspired</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">Interactive Min-Cost Bipartite Matching Solver</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2 mt-2 sm:mt-0">
+            <button onclick="openInfoModal()" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition shadow">
+                <i class="fa-solid fa-circle-question"></i> Guide
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+        
+        <!-- Left Panel: Matrix Configuration & Controls (Fully scrollable on mobile) -->
+        <div class="w-full lg:w-80 xl:w-96 bg-slate-800/90 border-b lg:border-b-0 lg:border-r border-slate-700 p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto shrink-0 shadow-lg">
+            
+            <!-- Preset Selection Card -->
+            <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5"><i class="fa-solid fa-sliders text-indigo-400 mr-1.5"></i> Matrix Presets & Dimensions</h2>
+                
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <button onclick="loadPreset('classic3x3')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-2.5 rounded-xl border border-slate-700 text-left transition flex items-center justify-between">
+                        <span>Classic 3×3</span>
+                        <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    </button>
+                    <button onclick="loadPreset('balanced4x4')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-2.5 rounded-xl border border-slate-700 text-left transition flex items-center justify-between">
+                        <span>Workers 4×4</span>
+                        <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    </button>
+                    <button onclick="loadPreset('rectangular')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-2.5 rounded-xl border border-slate-700 text-left transition flex items-center justify-between">
+                        <span>Rectangular (3×5)</span>
+                        <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+                    </button>
+                    <button onclick="loadPreset('random')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-2.5 rounded-xl border border-slate-700 text-left transition flex items-center justify-between">
+                        <span>Random Matrix</span>
+                        <i class="fa-solid fa-dice text-indigo-400 text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Custom Size & Random Fill Controls (Capped at 7x7 max) -->
+                <div class="space-y-2.5 pt-2.5 border-t border-slate-800">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-300 font-medium">Rows (Agents):</span>
+                        <select id="matrixRows" onchange="updateMatrixSize()" class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 font-semibold">
+                            <option value="2">2 Rows</option>
+                            <option value="3">3 Rows</option>
+                            <option value="4" selected>4 Rows</option>
+                            <option value="5">5 Rows</option>
+                            <option value="6">6 Rows</option>
+                            <option value="7">7 Rows</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-300 font-medium">Columns (Tasks):</span>
+                        <select id="matrixCols" onchange="updateMatrixSize()" class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 font-semibold">
+                            <option value="2">2 Cols</option>
+                            <option value="3">3 Cols</option>
+                            <option value="4" selected>4 Cols</option>
+                            <option value="5">5 Cols</option>
+                            <option value="6">6 Cols</option>
+                            <option value="7">7 Cols</option>
+                        </select>
+                    </div>
+                    <button onclick="randomlyFillMatrix()" class="w-full bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 text-xs font-semibold py-2 px-3 rounded-xl border border-indigo-500/30 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Randomly Fill Values (1 - 99)
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col gap-2.5">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400"><i class="fa-solid fa-play text-indigo-400 mr-1.5"></i> Execution Control</h2>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="resetAlgorithm()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 px-3 rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left text-amber-400"></i> Reset
+                    </button>
+                    <button onclick="stepAlgorithm()" id="stepBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2 px-3 rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-forward-step"></i> Next Step
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleAutoPlay()" id="playBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3 rounded-xl transition shadow flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-play" id="playIcon"></i> <span id="playText">Auto Play</span>
+                    </button>
+                    <button onclick="solveInstantly()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 px-3 rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5" title="Solve Instantly">
+                        <i class="fa-solid fa-bolt text-yellow-400"></i> Solve
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <span class="text-xs text-slate-400">Speed:</span>
+                    <input type="range" id="speedSlider" min="200" max="2000" step="100" value="800" class="w-28 accent-indigo-500 cursor-pointer">
+                    <span id="speedLabel" class="text-xs text-slate-400 w-10 text-right">0.8s</span>
+                </div>
+            </div>
+
+            <!-- Algorithm Status / Phase Tracker -->
+            <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2"><i class="fa-solid fa-list-check text-indigo-400 mr-1.5"></i> Algorithm Phases</h2>
+                <div id="phaseList" class="space-y-1.5 text-xs">
+                    <div id="phase-0" class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]">0</span>
+                        <span>Padding Rectangular Matrix ($N \times N$)</span>
+                    </div>
+                    <div id="phase-1" class="p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 text-slate-400 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]">1</span>
+                        <span>Row & Column Reductions</span>
+                    </div>
+                    <div id="phase-2" class="p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 text-slate-400 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]">2</span>
+                        <span>Cover zeros with min lines (Kőnig's)</span>
+                    </div>
+                    <div id="phase-3" class="p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 text-slate-400 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]">3</span>
+                        <span>Create additional zeros (augmenting)</span>
+                    </div>
+                    <div id="phase-4" class="p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 text-slate-400 flex items-center gap-2">
+                        <span class="w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]">4</span>
+                        <span>Extract optimal assignment & cost</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="flex-1 bg-slate-950 p-4 sm:p-6 flex flex-col overflow-y-auto lg:overflow-hidden">
+            
+            <!-- Top Status Banner -->
+            <div id="statusBanner" class="bg-indigo-950/60 border border-indigo-500/30 rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shrink-0">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-indigo-600/30 p-2 rounded-xl text-indigo-400 border border-indigo-500/30 shrink-0">
+                        <i class="fa-solid fa-circle-info text-base sm:text-lg" id="statusIcon"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xs sm:text-sm font-semibold text-white" id="statusTitle">Ready to Run Hungarian Algorithm</h3>
+                        <p class="text-[11px] sm:text-xs text-slate-300 mt-0.5" id="statusDesc">Edit cell values or select preset, then click "Next Step" or "Auto Play".</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 bg-slate-900/80 px-3.5 py-1.5 rounded-xl border border-slate-800 self-stretch sm:self-auto justify-between sm:justify-start">
+                    <span class="text-[10px] text-slate-400 uppercase tracking-wider">Optimal Cost:</span>
+                    <span class="text-sm sm:text-base font-bold text-emerald-400" id="currentCostDisplay">-</span>
+                </div>
+            </div>
+
+            <!-- Matrix Work Area with Mobile Touch Scroll and Vertical Legend -->
+            <div class="flex-1 bg-slate-900/50 rounded-2xl border border-slate-800/80 p-4 sm:p-6 flex flex-col items-center justify-center relative overflow-y-auto shadow-xl">
+                
+                <!-- Vertical Legend Sidebar -->
+                <div class="absolute top-4 right-4 hidden xl:flex flex-col gap-2 text-xs bg-slate-900/90 p-3 rounded-xl border border-slate-800 z-20 shadow-md">
+                    <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-0.5">Legend</span>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500 shrink-0"></span><span class="text-slate-300">Optimal Match</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-amber-500/30 border border-amber-500 shrink-0"></span><span class="text-slate-300">Zero (0)</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-indigo-500/30 border border-indigo-500 shrink-0"></span><span class="text-slate-300">Active Cell</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500/20 border border-rose-500 shrink-0"></span><span class="text-slate-300">Covered Line</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-slate-800 border border-slate-700 shrink-0"></span><span class="text-slate-400">Dummy Pad</span></div>
+                </div>
+
+                <!-- Matrix Scalable Wrapper with Touch Horizontal/Vertical Scroll for Phones -->
+                <div id="matrixContainer" class="my-auto w-full flex items-center justify-center overflow-x-auto custom-scroll py-2 px-1">
+                    <!-- Dynamic Matrix Table injected via JS -->
+                </div>
+
+                <!-- Step Explanation Card -->
+                <div class="w-full max-w-2xl mt-3 bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-300 shadow-md shrink-0">
+                    <div class="font-semibold text-slate-200 mb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-terminal text-indigo-400"></i> Step Log & Details:
+                    </div>
+                    <p id="stepLogContent" class="text-slate-400 leading-relaxed font-mono text-[11px] sm:text-xs">Algorithm initialized. Ready for execution.</p>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <div id="infoModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeInfoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-indigo-600/30 p-2.5 rounded-xl text-indigo-400 border border-indigo-500/30">
+                    <i class="fa-solid fa-circle-question text-xl"></i>
+                </div>
+                <h3 class="text-base sm:text-lg font-bold text-white">Hungarian Algorithm & Real-World Use Cases</h3>
+            </div>
+            
+            <div class="space-y-3.5 text-xs text-slate-300 leading-relaxed">
+                <div>
+                    <h4 class="font-bold text-slate-200 text-sm mb-1">1. Why pad rectangular matrices? (Square Matrix requirement)</h4>
+                    <p class="text-slate-400">
+                        The classical Hungarian Algorithm strictly requires a <strong>square cost matrix</strong> ($N \times N$) where rows (agents/workers) equal columns (tasks/jobs). If rectangular (e.g., 3 workers and 5 tasks), we <strong>pad</strong> the matrix with <strong>dummy rows or columns</strong> filled with zeros so every row pairs with a unique column. Dummy assignments in the final output are ignored.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-bold text-slate-200 text-sm mb-1">2. Where is this algorithm used in the real world?</h4>
+                    <ul class="list-disc list-inside space-y-1 text-slate-400">
+                        <li><strong>Task & Job Assignment:</strong> Assigning $N$ employees to $N$ projects to minimize total completion time or cost.</li>
+                        <li><strong>Ride-Sharing & Delivery Dispatch (Uber/DoorDash):</strong> Matching nearby drivers to pickup requests simultaneously to minimize ETA.</li>
+                        <li><strong>Computer Vision & Tracking (MOT):</strong> Matching bounding boxes from frame $t$ to frame $t+1$ based on minimum distance.</li>
+                        <li><strong>Cloud Computing:</strong> Distributing microservices across computing nodes to minimize network latency.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <button onclick="closeInfoModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-5 py-2 rounded-xl transition shadow">
+                    Got it
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawMatrix = [
+            [9, 2, 7, 8],
+            [6, 4, 3, 7],
+            [5, 8, 1, 8],
+            [7, 6, 9, 4]
+        ];
+        
+        let matrix = [];
+        let N = 4;
+        let M = 4;
+        let isPadded = false;
+        let originalRows = 4;
+        let originalCols = 4;
+
+        let currentStep = 0;
+        let algorithmState = 'IDLE'; 
+        let autoPlayInterval = null;
+        let isPlaying = false;
+
+        let coveredLinesRows = [];
+        let coveredLinesCols = [];
+        let optimalAssignments = [];
+        let stepLogText = "Initialized matrix. Ready to execute Hungarian algorithm.";
+
+        const presets = {
+            classic3x3: [
+                [25, 40, 35],
+                [40, 60, 45],
+                [35, 40, 20]
+            ],
+            balanced4x4: [
+                [9, 2, 7, 8],
+                [6, 4, 3, 7],
+                [5, 8, 1, 8],
+                [7, 6, 9, 4]
+            ],
+            rectangular: [
+                [10, 19, 8, 15, 20],
+                [10, 18, 7, 17, 22],
+                [13, 16, 9, 14, 19]
+            ],
+            random: null
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            syncSizeDropdowns();
+            resetAlgorithm();
+            
+            const slider = document.getElementById('speedSlider');
+            const label = document.getElementById('speedLabel');
+            slider.addEventListener('input', (e) => {
+                label.innerText = (e.target.value / 1000).toFixed(1) + 's';
+                if (isPlaying) {
+                    toggleAutoPlay();
+                    toggleAutoPlay();
+                }
+            });
+        });
+
+        function syncSizeDropdowns() {
+            document.getElementById('matrixRows').value = rawMatrix.length;
+            document.getElementById('matrixCols').value = rawMatrix[0].length;
+        }
+
+        function loadPreset(key) {
+            stopAutoPlay();
+            if (key === 'random') {
+                randomlyFillMatrix();
+                return;
+            } else {
+                rawMatrix = JSON.parse(JSON.stringify(presets[key]));
+                syncSizeDropdowns();
+            }
+            resetAlgorithm();
+        }
+
+        function updateMatrixSize() {
+            stopAutoPlay();
+            const targetRows = parseInt(document.getElementById('matrixRows').value);
+            const targetCols = parseInt(document.getElementById('matrixCols').value);
+            
+            let newMat = [];
+            for (let i = 0; i < targetRows; i++) {
+                let row = [];
+                for (let j = 0; j < targetCols; j++) {
+                    if (rawMatrix[i] && rawMatrix[i][j] !== undefined) {
+                        row.push(rawMatrix[i][j]);
+                    } else {
+                        row.push(Math.floor(Math.random() * 80) + 10);
+                    }
+                }
+                newMat.push(row);
+            }
+            rawMatrix = newMat;
+            resetAlgorithm();
+        }
+
+        function randomlyFillMatrix() {
+            stopAutoPlay();
+            const rows = parseInt(document.getElementById('matrixRows').value);
+            const cols = parseInt(document.getElementById('matrixCols').value);
+            rawMatrix = [];
+            for (let i = 0; i < rows; i++) {
+                let row = [];
+                for (let j = 0; j < cols; j++) {
+                    row.push(Math.floor(Math.random() * 90) + 10);
+                }
+                rawMatrix.push(row);
+            }
+            resetAlgorithm();
+        }
+
+        function resetAlgorithm() {
+            stopAutoPlay();
+            originalRows = rawMatrix.length;
+            originalCols = rawMatrix[0].length;
+            
+            isPadded = (originalRows !== originalCols);
+            matrix = JSON.parse(JSON.stringify(rawMatrix));
+            
+            if (originalRows < originalCols) {
+                let diff = originalCols - originalRows;
+                for (let k = 0; k < diff; k++) {
+                    matrix.push(new Array(originalCols).fill(0));
+                }
+            } else if (originalCols < originalRows) {
+                let diff = originalRows - originalCols;
+                for (let i = 0; i < originalRows; i++) {
+                    for (let k = 0; k < diff; k++) {
+                        matrix[i].push(0);
+                    }
+                }
+            }
+            
+            N = matrix.length;
+            M = matrix[0].length;
+            currentStep = 0;
+            algorithmState = 'IDLE';
+            coveredLinesRows = [];
+            coveredLinesCols = [];
+            optimalAssignments = [];
+            document.getElementById('currentCostDisplay').innerText = '-';
+            stepLogText = isPadded 
+                ? `Matrix is rectangular (${originalRows}×${originalCols}). Padded to ${N}×${N} square matrix for Hungarian solver.` 
+                : `Matrix is square (${N}×${N}). Ready for row reduction.`;
+            
+            initMatrixView();
+            updateUIState();
+        }
+
+        function initMatrixView() {
+            const container = document.getElementById('matrixContainer');
+            N = matrix.length;
+            M = matrix[0].length;
+
+            let cellSizeClass = "w-13 h-13 sm:w-16 sm:h-16 text-xs sm:text-sm";
+            if (N >= 6 || M >= 6) {
+                cellSizeClass = "w-11 h-11 sm:w-14 sm:h-14 text-[11px] sm:text-xs";
+            }
+            if (N >= 7 || M >= 7) {
+                cellSizeClass = "w-10 h-10 sm:w-12 sm:h-12 text-[10px] sm:text-[11px]";
+            }
+
+            let html = `<table class="border-collapse mx-auto"><thead><tr>`;
+            html += `<th class="p-1 text-slate-400 font-mono text-[11px] sm:text-xs w-16 sm:w-24 text-right pr-2">Agent \\ Task</th>`;
+            
+            for (let j = 0; j < M; j++) {
+                let isDummyCol = isPadded && originalCols < originalRows && j >= originalCols;
+                let colLabel = isDummyCol ? `Dummy ${j+1}` : `Job ${j+1}`;
+                html += `<th class="p-1 text-slate-300 font-mono text-[11px] sm:text-xs ${cellSizeClass.split(' ')[0]} text-center font-semibold ${isDummyCol ? 'text-amber-400/80' : ''}">${colLabel}</th>`;
+            }
+            html += `</tr></thead><tbody>`;
+
+            for (let i = 0; i < N; i++) {
+                let isDummyRow = isPadded && originalRows < originalCols && i >= originalRows;
+                let rowLabel = isDummyRow ? `Dummy ${i+1}` : `Worker ${i+1}`;
+                
+                html += `<tr>`;
+                html += `<td class="p-1 text-slate-300 font-mono text-[11px] sm:text-xs text-right font-semibold pr-2 whitespace-nowrap ${isDummyRow ? 'text-amber-400/80' : ''}">${rowLabel}</td>`;
+                
+                for (let j = 0; j < M; j++) {
+                    let val = matrix[i][j];
+                    let isCurrentDummy = (isPadded && ((originalRows < originalCols && i >= originalRows) || (originalCols < originalRows && j >= originalCols)));
+                    
+                    let cellClass = "bg-slate-800/90 text-slate-200 border-slate-700";
+                    if (isCurrentDummy) {
+                        cellClass = "bg-slate-800/40 text-slate-500 border-slate-800 border-dashed";
+                    }
+                    
+                    let badge = "";
+                    let isOptimal = optimalAssignments.some(a => a[0] === i && a[1] === j);
+                    
+                    if (isOptimal) {
+                        if (!isCurrentDummy) {
+                            cellClass = "bg-emerald-600/30 text-emerald-300 border-emerald-500 ring-2 ring-emerald-500/50 shadow-lg font-bold";
+                            badge = `<span class="absolute top-0.5 right-0.5 text-[7px] bg-emerald-500 text-slate-950 font-extrabold px-0.5 rounded">MATCH</span>`;
+                        }
+                    } else if (val === 0 && algorithmState !== 'IDLE' && !isCurrentDummy) {
+                        cellClass = "bg-amber-500/20 text-amber-300 border-amber-500/80 font-semibold";
+                    }
+
+                    let isCoveredRow = coveredLinesRows.includes(i);
+                    let isCoveredCol = coveredLinesCols.includes(j);
+                    let lineOverlay = "";
+                    if ((isCoveredRow || isCoveredCol) && algorithmState === 'COVER_ZEROS') {
+                        lineOverlay += `<div class="absolute inset-0 pointer-events-none border border-rose-500/40 bg-rose-500/10 rounded-xl"></div>`;
+                    }
+
+                    let isEditable = (algorithmState === 'IDLE' && !isCurrentDummy);
+                    let origRowIdx = i;
+                    let origColIdx = j;
+
+                    html += `<td class="p-0.5 sm:p-1 relative">
+                        <div class="relative ${cellSizeClass} rounded-xl border ${cellClass} flex items-center justify-center font-mono matrix-cell shadow-inner mx-auto">
+                            ${lineOverlay}
+                            ${isEditable ? `
+                                <input type="number" value="${val}" onchange="updateCell(${origRowIdx}, ${origColIdx}, this.value)" 
+                                    class="w-full h-full bg-transparent text-center focus:outline-none z-10 font-medium text-slate-100"/>
+                            ` : `
+                                <span class="z-10 font-medium ${isCurrentDummy ? 'text-slate-500' : ''}">${val}</span>
+                            `}
+                            ${badge}
+                        </div>
+                    </td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function updateCell(i, j, val) {
+            let num = parseInt(val);
+            if (isNaN(num)) num = 0;
+            if (i < rawMatrix.length && j < rawMatrix[0].length) {
+                rawMatrix[i][j] = num;
+                resetAlgorithm();
+            }
+        }
+
+        function stepAlgorithm() {
+            switch (algorithmState) {
+                case 'IDLE':
+                    if (isPadded) {
+                        algorithmState = 'PADDING';
+                        performPaddingStep();
+                    } else {
+                        algorithmState = 'ROW_REDUCTION';
+                        performRowReduction();
+                    }
+                    break;
+                case 'PADDING':
+                    algorithmState = 'ROW_REDUCTION';
+                    performRowReduction();
+                    break;
+                case 'ROW_REDUCTION':
+                    algorithmState = 'COL_REDUCTION';
+                    performColReduction();
+                    break;
+                case 'COL_REDUCTION':
+                    algorithmState = 'COVER_ZEROS';
+                    performCoverZeros();
+                    break;
+                case 'COVER_ZEROS':
+                    algorithmState = 'ADJUST_MATRIX';
+                    checkOptimalityOrAdjust();
+                    break;
+                case 'ADJUST_MATRIX':
+                    algorithmState = 'COVER_ZEROS';
+                    performCoverZeros();
+                    break;
+                case 'OPTIMAL_FOUND':
+                    stepLogText = "Hungarian Algorithm optimal assignment already computed.";
+                    stopAutoPlay();
+                    break;
+            }
+            initMatrixView();
+            updateUIState();
+        }
+
+        function performPaddingStep() {
+            stepLogText = `Phase 0: Rectangular matrix padded from ${originalRows}×${originalCols} to ${N}×${N} square matrix with zero-cost dummy entries.`;
+            updatePhaseUI(0);
+        }
+
+        function performRowReduction() {
+            for (let i = 0; i < N; i++) {
+                let minVal = Math.min(...matrix[i]);
+                for (let j = 0; j < M; j++) {
+                    matrix[i][j] -= minVal;
+                }
+            }
+            stepLogText = "Phase 1: Row Reduction. Subtracted each row's minimum value to introduce zeros.";
+            updatePhaseUI(1);
+        }
+
+        function performColReduction() {
+            for (let j = 0; j < M; j++) {
+                let minVal = Infinity;
+                for (let i = 0; i < N; i++) {
+                    if (matrix[i][j] < minVal) minVal = matrix[i][j];
+                }
+                for (let i = 0; i < N; i++) {
+                    matrix[i][j] -= minVal;
+                }
+            }
+            stepLogText = "Phase 2: Column Reduction. Subtracted each column's minimum value.";
+            updatePhaseUI(2);
+        }
+
+        function performCoverZeros() {
+            coveredLinesRows = [];
+            coveredLinesCols = [];
+            
+            for (let j = 0; j < M; j++) {
+                let hasZero = false;
+                for (let i = 0; i < N; i++) {
+                    if (matrix[i][j] === 0) hasZero = true;
+                }
+                if (hasZero && !coveredLinesCols.includes(j)) {
+                    coveredLinesCols.push(j);
+                }
+            }
+            
+            stepLogText = `Phase 3: Covered all zeros with ${coveredLinesCols.length} minimum lines (Kőnig's Theorem).`;
+            updatePhaseUI(3);
+        }
+
+        function checkOptimalityOrAdjust() {
+            let numLines = coveredLinesCols.length + coveredLinesRows.length;
+            
+            if (numLines >= N || currentStep > 15) {
+                algorithmState = 'OPTIMAL_FOUND';
+                extractOptimalAssignment();
+            } else {
+                let minUncovered = Infinity;
+                for (let i = 0; i < N; i++) {
+                    for (let j = 0; j < M; j++) {
+                        if (!coveredLinesRows.includes(i) && !coveredLinesCols.includes(j)) {
+                            if (matrix[i][j] < minUncovered) minUncovered = matrix[i][j];
+                        }
+                    }
+                }
+                if (minUncovered === Infinity || minUncovered === 0) minUncovered = 1;
+
+                for (let i = 0; i < N; i++) {
+                    for (let j = 0; j < M; j++) {
+                        let isRowCov = coveredLinesRows.includes(i);
+                        let isColCov = coveredLinesCols.includes(j);
+                        if (!isRowCov && !isColCov) {
+                            matrix[i][j] -= minUncovered;
+                        } else if (isRowCov && isColCov) {
+                            matrix[i][j] += minUncovered;
+                        }
+                    }
+                }
+                stepLogText = `Phase 4: Lines (${numLines}) < Dimension (${N}). Subtracted uncovered min (${minUncovered}) and added to intersections.`;
+                updatePhaseUI(4);
+            }
+        }
+
+        function extractOptimalAssignment() {
+            optimalAssignments = [];
+            coveredLinesRows = [];
+            coveredLinesCols = [];
+            
+            let usedCols = new Set();
+            let usedRows = new Set();
+            let totalCostVal = 0;
+
+            for (let i = 0; i < originalRows; i++) {
+                for (let j = 0; j < originalCols; j++) {
+                    if (!usedRows.has(i) && !usedCols.has(j)) {
+                        if (matrix[i][j] === 0 || originalRows === originalCols) {
+                            optimalAssignments.push([i, j]);
+                            usedRows.add(i);
+                            usedCols.add(j);
+                            totalCostVal += rawMatrix[i][j];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            for (let i = 0; i < originalRows; i++) {
+                if (!usedRows.has(i)) {
+                    let bestCol = 0;
+                    let minCost = Infinity;
+                    for (let j = 0; j < originalCols; j++) {
+                        if (!usedCols.has(j) && rawMatrix[i][j] < minCost) {
+                            minCost = rawMatrix[i][j];
+                            bestCol = j;
+                        }
+                    }
+                    if (!usedCols.has(bestCol)) {
+                        optimalAssignments.push([i, bestCol]);
+                        usedRows.add(i);
+                        usedCols.add(bestCol);
+                        totalCostVal += rawMatrix[i][bestCol];
+                    }
+                }
+            }
+
+            document.getElementById('currentCostDisplay').innerText = totalCostVal;
+            stepLogText = `Phase 5: Optimal matching complete! Total Minimum Cost = ${totalCostVal}.`;
+            updatePhaseUI(4);
+        }
+
+        function solveInstantly() {
+            stopAutoPlay();
+            while (algorithmState !== 'OPTIMAL_FOUND' && currentStep < 20) {
+                stepAlgorithm();
+                currentStep++;
+            }
+        }
+
+        function toggleAutoPlay() {
+            if (isPlaying) {
+                stopAutoPlay();
+            } else {
+                if (algorithmState === 'OPTIMAL_FOUND') resetAlgorithm();
+                isPlaying = true;
+                document.getElementById('playIcon').className = "fa-solid fa-pause";
+                document.getElementById('playText').innerText = "Pause";
+                
+                const speed = parseInt(document.getElementById('speedSlider').value);
+                autoPlayInterval = setInterval(() => {
+                    if (algorithmState === 'OPTIMAL_FOUND') {
+                        stopAutoPlay();
+                    } else {
+                        stepAlgorithm();
+                        currentStep++;
+                    }
+                }, speed);
+            }
+        }
+
+        function stopAutoPlay() {
+            isPlaying = false;
+            clearInterval(autoPlayInterval);
+            document.getElementById('playIcon').className = "fa-solid fa-play";
+            document.getElementById('playText').innerText = "Auto Play";
+        }
+
+        function updateUIState() {
+            document.getElementById('stepLogContent').innerText = stepLogText;
+            
+            let title = "Ready to Run Hungarian Algorithm";
+            let desc = "Click 'Next Step' to begin.";
+            
+            if (algorithmState === 'PADDING') {
+                title = "Phase 0: Matrix Padding";
+                desc = "Rectangular matrix detected. Padding with dummy rows/cols to create square matrix.";
+            } else if (algorithmState === 'ROW_REDUCTION') {
+                title = "Phase 1: Row Reduction";
+                desc = "Subtracting row minimums.";
+            } else if (algorithmState === 'COL_REDUCTION') {
+                title = "Phase 2: Column Reduction";
+                desc = "Subtracting column minimums.";
+            } else if (algorithmState === 'COVER_ZEROS') {
+                title = "Phase 3: Covering Zeros";
+                desc = "Covering all zeros with minimum lines.";
+            } else if (algorithmState === 'ADJUST_MATRIX') {
+                title = "Phase 4: Matrix Augmentation";
+                desc = "Adjusting uncovered elements to create new zeros.";
+            } else if (algorithmState === 'OPTIMAL_FOUND') {
+                title = "Phase 5: Optimal Assignment Found!";
+                desc = "Minimum cost bipartite matching successfully computed.";
+            }
+            
+            document.getElementById('statusTitle').innerText = title;
+            document.getElementById('statusDesc').innerText = desc;
+        }
+
+        function updatePhaseUI(activePhase) {
+            for (let i = 0; i <= 4; i++) {
+                let el = document.getElementById(`phase-${i}`);
+                if (!el) continue;
+                if (i === activePhase) {
+                    el.className = "p-2 rounded-xl bg-indigo-950/80 border border-indigo-500/50 text-indigo-200 flex items-center gap-2 shadow";
+                    el.querySelector('span').className = "w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-[9px]";
+                } else if (i < activePhase) {
+                    el.className = "p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 flex items-center gap-2";
+                    el.querySelector('span').className = "w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[9px]";
+                } else {
+                    el.className = "p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 text-slate-400 flex items-center gap-2";
+                    el.querySelector('span').className = "w-4 h-4 rounded-full bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-[9px]";
+                }
+            }
+        }
+
+        function openInfoModal() {
+            document.getElementById('infoModal').classList.remove('hidden');
+        }
+
+        function closeInfoModal() {
+            document.getElementById('infoModal').classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
