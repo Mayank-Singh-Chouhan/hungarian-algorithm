@@ -205,7 +205,7 @@
                     <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500 shrink-0"></span><span class="text-slate-300">Optimal Match</span></div>
                     <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-amber-500/30 border border-amber-500 shrink-0"></span><span class="text-slate-300">Zero (0)</span></div>
                     <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-indigo-500/30 border border-indigo-500 shrink-0"></span><span class="text-slate-300">Active Cell</span></div>
-                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500/20 border border-rose-500 shrink-0"></span><span class="text-slate-300">Covered Line</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-[3px] bg-rose-500 shrink-0"></span><span class="text-slate-300">Covering Line</span></div>
                     <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-slate-800 border border-slate-700 shrink-0"></span><span class="text-slate-400">Dummy Pad</span></div>
                 </div>
 
@@ -290,6 +290,7 @@
         let coveredLinesRows = [];
         let coveredLinesCols = [];
         let optimalAssignments = [];
+        let zeroMatchCol = [];   // zeroMatchCol[j] = row matched to column j on a zero (or -1)
         let stepLogText = "Initialized matrix. Ready to execute Hungarian algorithm.";
 
         const presets = {
@@ -409,6 +410,7 @@
             coveredLinesRows = [];
             coveredLinesCols = [];
             optimalAssignments = [];
+            zeroMatchCol = [];
             document.getElementById('currentCostDisplay').innerText = '-';
             stepLogText = isPadded 
                 ? `Matrix is rectangular (${originalRows}×${originalCols}). Padded to ${N}×${N} square matrix for Hungarian solver.` 
@@ -416,6 +418,7 @@
             
             initMatrixView();
             updateUIState();
+            updatePhaseUI(-1); // all phases back to pending
         }
 
         function initMatrixView() {
@@ -431,13 +434,16 @@
                 cellSizeClass = "w-10 h-10 sm:w-12 sm:h-12 text-[10px] sm:text-[11px]";
             }
 
+            const showLines = (algorithmState === 'COVER_ZEROS' || algorithmState === 'ADJUST_MATRIX');
+
             let html = `<table class="border-collapse mx-auto"><thead><tr>`;
             html += `<th class="p-1 text-slate-400 font-mono text-[11px] sm:text-xs w-16 sm:w-24 text-right pr-2">Agent \\ Task</th>`;
             
             for (let j = 0; j < M; j++) {
                 let isDummyCol = isPadded && originalCols < originalRows && j >= originalCols;
                 let colLabel = isDummyCol ? `Dummy ${j+1}` : `Job ${j+1}`;
-                html += `<th class="p-1 text-slate-300 font-mono text-[11px] sm:text-xs ${cellSizeClass.split(' ')[0]} text-center font-semibold ${isDummyCol ? 'text-amber-400/80' : ''}">${colLabel}</th>`;
+                let colCovered = showLines && coveredLinesCols.includes(j);
+                html += `<th class="p-1 font-mono text-[11px] sm:text-xs ${cellSizeClass.split(' ')[0]} text-center font-semibold ${colCovered ? 'text-rose-400' : (isDummyCol ? 'text-amber-400/80' : 'text-slate-300')}">${colLabel}${colCovered ? '<div class="text-rose-500 leading-none">┃</div>' : ''}</th>`;
             }
             html += `</tr></thead><tbody>`;
 
@@ -446,7 +452,8 @@
                 let rowLabel = isDummyRow ? `Dummy ${i+1}` : `Worker ${i+1}`;
                 
                 html += `<tr>`;
-                html += `<td class="p-1 text-slate-300 font-mono text-[11px] sm:text-xs text-right font-semibold pr-2 whitespace-nowrap ${isDummyRow ? 'text-amber-400/80' : ''}">${rowLabel}</td>`;
+                let rowCovered = showLines && coveredLinesRows.includes(i);
+                html += `<td class="p-1 font-mono text-[11px] sm:text-xs text-right font-semibold pr-2 whitespace-nowrap ${rowCovered ? 'text-rose-400' : (isDummyRow ? 'text-amber-400/80' : 'text-slate-300')}">${rowLabel}${rowCovered ? ' <span class="text-rose-500">━</span>' : ''}</td>`;
                 
                 for (let j = 0; j < M; j++) {
                     let val = matrix[i][j];
@@ -469,11 +476,15 @@
                         cellClass = "bg-amber-500/20 text-amber-300 border-amber-500/80 font-semibold";
                     }
 
-                    let isCoveredRow = coveredLinesRows.includes(i);
-                    let isCoveredCol = coveredLinesCols.includes(j);
+                    // Draw the covering lines straight through the covered rows / columns
                     let lineOverlay = "";
-                    if ((isCoveredRow || isCoveredCol) && algorithmState === 'COVER_ZEROS') {
-                        lineOverlay += `<div class="absolute inset-0 pointer-events-none border border-rose-500/40 bg-rose-500/10 rounded-xl"></div>`;
+                    if (showLines) {
+                        if (coveredLinesRows.includes(i)) {
+                            lineOverlay += `<div class="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[3px] bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] pointer-events-none z-20"></div>`;
+                        }
+                        if (coveredLinesCols.includes(j)) {
+                            lineOverlay += `<div class="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] pointer-events-none z-20"></div>`;
+                        }
                     }
 
                     let isEditable = (algorithmState === 'IDLE' && !isCurrentDummy);
@@ -481,8 +492,8 @@
                     let origColIdx = j;
 
                     html += `<td class="p-0.5 sm:p-1 relative">
+                        ${lineOverlay}
                         <div class="relative ${cellSizeClass} rounded-xl border ${cellClass} flex items-center justify-center font-mono matrix-cell shadow-inner mx-auto">
-                            ${lineOverlay}
                             ${isEditable ? `
                                 <input type="number" value="${val}" onchange="updateCell(${origRowIdx}, ${origColIdx}, this.value)" 
                                     class="w-full h-full bg-transparent text-center focus:outline-none z-10 font-medium text-slate-100"/>
@@ -574,35 +585,77 @@
                     matrix[i][j] -= minVal;
                 }
             }
-            stepLogText = "Phase 2: Column Reduction. Subtracted each column's minimum value.";
-            updatePhaseUI(2);
+            stepLogText = "Phase 1b: Column Reduction. Subtracted each column's minimum value.";
+            updatePhaseUI(1);
+        }
+
+        // Maximum matching using only zero cells (Kuhn's augmenting paths).
+        // Its size = max number of independent zeros = min number of covering lines (Kőnig).
+        function computeZeroMatching() {
+            zeroMatchCol = new Array(M).fill(-1);
+            let size = 0;
+            const tryRow = (i, seen) => {
+                for (let j = 0; j < M; j++) {
+                    if (matrix[i][j] === 0 && !seen[j]) {
+                        seen[j] = true;
+                        if (zeroMatchCol[j] === -1 || tryRow(zeroMatchCol[j], seen)) {
+                            zeroMatchCol[j] = i;
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
+            for (let i = 0; i < N; i++) {
+                if (tryRow(i, new Array(M).fill(false))) size++;
+            }
+            return size;
         }
 
         function performCoverZeros() {
-            coveredLinesRows = [];
-            coveredLinesCols = [];
-            
-            for (let j = 0; j < M; j++) {
-                let hasZero = false;
-                for (let i = 0; i < N; i++) {
-                    if (matrix[i][j] === 0) hasZero = true;
-                }
-                if (hasZero && !coveredLinesCols.includes(j)) {
-                    coveredLinesCols.push(j);
+            computeZeroMatching();
+            const matchRow = new Array(N).fill(-1);
+            zeroMatchCol.forEach((i, j) => { if (i !== -1) matchRow[i] = j; });
+
+            // Kőnig construction: from every unmatched row, walk zero -> matched row alternately.
+            const visRow = new Array(N).fill(false);
+            const visCol = new Array(M).fill(false);
+            const queue = [];
+            for (let i = 0; i < N; i++) if (matchRow[i] === -1) { visRow[i] = true; queue.push(i); }
+            while (queue.length) {
+                const i = queue.shift();
+                for (let j = 0; j < M; j++) {
+                    if (matrix[i][j] === 0 && !visCol[j]) {
+                        visCol[j] = true;
+                        const r = zeroMatchCol[j];
+                        if (r !== -1 && !visRow[r]) { visRow[r] = true; queue.push(r); }
+                    }
                 }
             }
-            
-            stepLogText = `Phase 3: Covered all zeros with ${coveredLinesCols.length} minimum lines (Kőnig's Theorem).`;
-            updatePhaseUI(3);
+            // Lines = unvisited rows + visited columns
+            coveredLinesRows = [];
+            coveredLinesCols = [];
+            for (let i = 0; i < N; i++) if (!visRow[i]) coveredLinesRows.push(i);
+            for (let j = 0; j < M; j++) if (visCol[j]) coveredLinesCols.push(j);
+
+            const numLines = coveredLinesRows.length + coveredLinesCols.length;
+            const rowNames = coveredLinesRows.map(i => `Row ${i + 1}`).join(', ') || 'none';
+            const colNames = coveredLinesCols.map(j => `Col ${j + 1}`).join(', ') || 'none';
+            stepLogText = `Phase 2: All zeros covered with the minimum of ${numLines} line(s) — horizontal: ${rowNames}; vertical: ${colNames}.\n`
+                + (numLines >= N
+                    ? `${numLines} lines = N (${N}) → an optimal assignment exists using zeros only. Next step extracts it.`
+                    : `${numLines} lines < N (${N}) → not optimal yet. Next step creates more zeros.`);
+            updatePhaseUI(2);
         }
 
         function checkOptimalityOrAdjust() {
             let numLines = coveredLinesCols.length + coveredLinesRows.length;
-            
-            if (numLines >= N || currentStep > 15) {
+
+            if (numLines >= N) {
                 algorithmState = 'OPTIMAL_FOUND';
                 extractOptimalAssignment();
             } else {
+                // Smallest value not crossed by any line (always > 0, since every zero is covered)
                 let minUncovered = Infinity;
                 for (let i = 0; i < N; i++) {
                     for (let j = 0; j < M; j++) {
@@ -611,7 +664,6 @@
                         }
                     }
                 }
-                if (minUncovered === Infinity || minUncovered === 0) minUncovered = 1;
 
                 for (let i = 0; i < N; i++) {
                     for (let j = 0; j < M; j++) {
@@ -624,61 +676,43 @@
                         }
                     }
                 }
-                stepLogText = `Phase 4: Lines (${numLines}) < Dimension (${N}). Subtracted uncovered min (${minUncovered}) and added to intersections.`;
-                updatePhaseUI(4);
+                stepLogText = `Phase 3: Lines (${numLines}) < N (${N}). Smallest uncovered value = ${minUncovered}: subtracted it from every uncovered cell and added it where two lines cross. Cells under exactly one line are unchanged.`;
+                updatePhaseUI(3);
             }
         }
 
         function extractOptimalAssignment() {
+            // Lines = N, so the zero matching is perfect: one zero per row and per column
+            computeZeroMatching();
             optimalAssignments = [];
             coveredLinesRows = [];
             coveredLinesCols = [];
-            
-            let usedCols = new Set();
-            let usedRows = new Set();
+
             let totalCostVal = 0;
-
-            for (let i = 0; i < originalRows; i++) {
-                for (let j = 0; j < originalCols; j++) {
-                    if (!usedRows.has(i) && !usedCols.has(j)) {
-                        if (matrix[i][j] === 0 || originalRows === originalCols) {
-                            optimalAssignments.push([i, j]);
-                            usedRows.add(i);
-                            usedCols.add(j);
-                            totalCostVal += rawMatrix[i][j];
-                            break;
-                        }
-                    }
+            let pairs = [];
+            for (let j = 0; j < M; j++) {
+                const i = zeroMatchCol[j];
+                if (i === -1) continue;
+                optimalAssignments.push([i, j]);
+                if (i < originalRows && j < originalCols) {
+                    totalCostVal += rawMatrix[i][j];
+                    pairs.push([i, `Worker ${i + 1} → Job ${j + 1} (original cost ${rawMatrix[i][j]})`]);
+                } else if (i < originalRows) {
+                    pairs.push([i, `Worker ${i + 1} → Dummy ${j + 1} (no real job, cost 0)`]);
                 }
             }
-
-            for (let i = 0; i < originalRows; i++) {
-                if (!usedRows.has(i)) {
-                    let bestCol = 0;
-                    let minCost = Infinity;
-                    for (let j = 0; j < originalCols; j++) {
-                        if (!usedCols.has(j) && rawMatrix[i][j] < minCost) {
-                            minCost = rawMatrix[i][j];
-                            bestCol = j;
-                        }
-                    }
-                    if (!usedCols.has(bestCol)) {
-                        optimalAssignments.push([i, bestCol]);
-                        usedRows.add(i);
-                        usedCols.add(bestCol);
-                        totalCostVal += rawMatrix[i][bestCol];
-                    }
-                }
-            }
+            pairs.sort((a, b) => a[0] - b[0]);
 
             document.getElementById('currentCostDisplay').innerText = totalCostVal;
-            stepLogText = `Phase 5: Optimal matching complete! Total Minimum Cost = ${totalCostVal}.`;
+            stepLogText = `Phase 4: Picked one 0 in every row and every column (no two in the same row/column). Every MATCH is a 0 in the reduced matrix; its cost is read from the ORIGINAL matrix:\n`
+                + pairs.map(p => p[1]).join('\n')
+                + `\nTotal Minimum Cost = ${totalCostVal}.`;
             updatePhaseUI(4);
         }
 
         function solveInstantly() {
             stopAutoPlay();
-            while (algorithmState !== 'OPTIMAL_FOUND' && currentStep < 20) {
+            while (algorithmState !== 'OPTIMAL_FOUND' && currentStep < 1000) {
                 stepAlgorithm();
                 currentStep++;
             }
@@ -728,13 +762,13 @@
                 title = "Phase 2: Column Reduction";
                 desc = "Subtracting column minimums.";
             } else if (algorithmState === 'COVER_ZEROS') {
-                title = "Phase 3: Covering Zeros";
-                desc = "Covering all zeros with minimum lines.";
+                title = "Phase 2: Covering Zeros";
+                desc = "Red lines cross the rows/columns that cover every zero using the fewest possible lines.";
             } else if (algorithmState === 'ADJUST_MATRIX') {
-                title = "Phase 4: Matrix Augmentation";
+                title = "Phase 3: Create Additional Zeros";
                 desc = "Adjusting uncovered elements to create new zeros.";
             } else if (algorithmState === 'OPTIMAL_FOUND') {
-                title = "Phase 5: Optimal Assignment Found!";
+                title = "Phase 4: Optimal Assignment Found!";
                 desc = "Minimum cost bipartite matching successfully computed.";
             }
             
